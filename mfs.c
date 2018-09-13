@@ -86,13 +86,14 @@ int executeCmd( char cmd [], char **argv )
 }
 
 static void handle_signal (int sig ) {
-  printf ("Caught signal %d\n", sig );
-	// switch(sig){
-  //       case SIGCHLD:
-  //            // note that the last argument is important for the wait to work
-  //            waitpid(-1, &status, WNOHANG);
-  //            break;
-  //    }
+  // printf ("Caught signal %d\n", sig );
+	int status;
+	switch(sig){
+        case SIGTSTP:
+             // note that the last argument is important for the wait to work
+             waitpid(-1, &status, WNOHANG);
+             break;
+     }
 }
 
 
