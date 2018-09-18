@@ -41,13 +41,66 @@
 
 #define MAX_NUM_ARGUMENTS 5     // Mav shell only supports five arguments
 
+#define MAX_NUM_PREVIOUS_PIDS 15
+
+#define MAX_NUM_HISTORY 15
+
+
+pid_t pid;
+char **history;
+int currentHistoryIndex;
+
+// creating array of PIDS
+int pids [MAX_NUM_PREVIOUS_PIDS];
+int currentPidsIndex = 0;
+
+
+
+void printHistory() {
+	int i;
+	for (i = 0; i < currentHistoryIndex; i++ ) {
+		printf("%d: %s\n", i, history[i]);
+	}
+}
+
+void printPids() {
+	int i;
+	for (i = 0; i < currentPidsIndex; i++ ) {
+		printf("%d: %d\n", i, pids[i]);
+	}
+}
 
 int executeCmd( char cmd [], char **argv )
 {
 	if ( (strcmp(cmd, "exit") == 0) || (strcmp(cmd, "quit") == 0) )
 		return 1;
+	
+	if ( (strcmp(cmd, "history") == 0) ) {
+		printHistory();
+		return 0;
+	}
+	
+	if ( (strcmp(cmd, "listpids") == 0) || (strcmp(cmd, "showpids") == 0) ) {
+		printPids();
+		return 0;
+	}
+	
+	if ( strcmp("bg", cmd) == 0 ) {
+		kill(pid, SIGCONT);
+		return 0;
+	}
+	
+	if ( (strcmp(cmd, "cd") == 0) && argv[1]) {
+		chdir(argv[1]);
+		return 0;
+	}
 
-	pid_t pid = fork();
+	pid = fork();
+	
+	// Add pid to list of pids and increment current index TODO deal with the array being full and reallocating space
+	pids[currentPidsIndex] = pid;
+	currentPidsIndex++;
+	
 
 	if( pid == -1 )
 	{
@@ -58,16 +111,12 @@ int executeCmd( char cmd [], char **argv )
 	else if ( pid == 0 )
 	{
 		// When fork() returns 0, we are in the child process.
-
-		if ( (strcmp(cmd, "cd") == 0) && argv[1]) {
-			chdir(argv[1]);
-		}
-		else {
+		
 			int error = execvp(cmd, argv);
 			if (error) {
 				printf("%s: Command not found\n", cmd);
+				exit(0);
 			}
-		}
 	}
 	else
 	{
@@ -79,7 +128,6 @@ int executeCmd( char cmd [], char **argv )
 		// Force the parent process to wait until the child process
 		// exits
 		waitpid(pid, &status, 0 );
-//		printf("Hello from the parent process\n");
 		fflush( NULL );
 	}
 	return 0;
@@ -107,6 +155,11 @@ int main() {
 		perror ("sigaction: ");
 		return 1;
 	}
+	
+	// creating 2D array of history
+	history = (char**)calloc(MAX_NUM_HISTORY,sizeof(char*));
+	currentHistoryIndex = 0;
+	
 
   char * cmd_str = (char*) malloc( MAX_COMMAND_SIZE );
 
@@ -148,24 +201,19 @@ int main() {
       }
         token_count++;
     }
-
-    // Now print the tokenized input as a debug check
-    // \TODO Remove this code and replace with your shell functionality
-
-//    int token_index  = 0;
-//    for( token_index = 0; token_index < token_count; token_index ++ )
-//    {
-//      printf("token[%d] = %s\n", token_index, token[token_index] );
-//    }
-
 		// checks if there is a command
-	  if (token[0]) {
-			int result = executeCmd(token[0], token);
-			// 1 is returned if command is quit or exit
-			if (result) {
-				return 0;
-			}
-	  }
+	if (token[0]) {
+		// adds command to history and increments history index
+//		history[currentHistoryIndex] = token;
+		
+		// takes the command and the rest of argument to executeCmd function
+		int result = executeCmd(token[0], token);
+		
+		// 1 is returned if command is quit or exit
+		if (result) {
+			return 0;
+		}
+	}
 
 
 
