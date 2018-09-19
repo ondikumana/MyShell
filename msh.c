@@ -1,3 +1,10 @@
+/*
+ Name: Olivier Ndikumana
+ ID: 1001520973
+*/
+
+
+
 // The MIT License (MIT)
 //
 // Copyright (c) 2016, 2017 Trevor Bakker
@@ -41,50 +48,70 @@
 
 #define MAX_NUM_ARGUMENTS 5     // Mav shell only supports five arguments
 
-#define MAX_NUM_PREVIOUS_PIDS 15
+#define MAX_NUM_PREVIOUS_PIDS 15 // Only 15 previous pids can be displayed
 
-#define MAX_NUM_HISTORY 15
+#define MAX_NUM_HISTORY 15 // Only 15 previous history files will be displayed
 
 
 pid_t pid;
-char **history;
+
+// creating array of commands to store history and an index to keep track of them
+char history [MAX_NUM_HISTORY] [MAX_COMMAND_SIZE];
 int currentHistoryIndex;
 
-// creating array of PIDS
+// creating array of PIDS and an index to keep track of them
 int pids [MAX_NUM_PREVIOUS_PIDS];
-int currentPidsIndex = 0;
+int currentPidsIndex;
 
 
 
 void printHistory() {
-	int i;
-	for (i = 0; i < currentHistoryIndex; i++ ) {
-		printf("%d: %s\n", i, history[i]);
+	// prints data in the histry array and does not return anything
+	int i = 0;
+	
+	// makes index i start from last 15 commands but does not delete all other previous commands
+	if (currentHistoryIndex > MAX_NUM_HISTORY) {
+		i = currentHistoryIndex - MAX_NUM_HISTORY;
+	}
+	
+	for (; i < currentHistoryIndex; i++ ) {
+		printf("%d: %s",  i, history[i]);
 	}
 }
 
 void printPids() {
-	int i;
-	for (i = 0; i < currentPidsIndex; i++ ) {
+	// prints data in the pids array and does not return anything
+	int i = 0;
+	
+	// makes index i start from last 15 pids but does not delete all other previous pids
+	if (currentPidsIndex > MAX_NUM_PREVIOUS_PIDS) {
+		i = currentPidsIndex - MAX_NUM_PREVIOUS_PIDS;
+	}
+
+	for (;i < currentPidsIndex; i++ ) {
 		printf("%d: %d\n", i, pids[i]);
 	}
 }
 
 int executeCmd( char cmd [], char **argv )
 {
+	// check if user wants to close shell
 	if ( (strcmp(cmd, "exit") == 0) || (strcmp(cmd, "quit") == 0) )
 		return 1;
 	
+	// check if user wants view history
 	if ( (strcmp(cmd, "history") == 0) ) {
 		printHistory();
 		return 0;
 	}
 	
+	// check if user wants a list of previous pids
 	if ( (strcmp(cmd, "listpids") == 0) || (strcmp(cmd, "showpids") == 0) ) {
 		printPids();
 		return 0;
 	}
 	
+	// check if user wants to run interrupted proccess in background
 	if ( strcmp("bg", cmd) == 0 ) {
 		kill(pid, SIGCONT);
 		return 0;
@@ -134,11 +161,10 @@ int executeCmd( char cmd [], char **argv )
 }
 
 static void handle_signal (int sig ) {
-  // printf ("Caught signal %d\n", sig );
 	int status;
 	switch(sig){
+		// suspends proccess. Only handles SIGSTP
         case SIGTSTP:
-             // note that the last argument is important for the wait to work
              waitpid(-1, &status, WNOHANG);
              break;
      }
@@ -146,20 +172,6 @@ static void handle_signal (int sig ) {
 
 
 int main() {
-
-	// handling SIGTSTP
-	struct sigaction act;
-	memset (&act, '\0', sizeof(act));
-	act.sa_handler = &handle_signal;
-	if (sigaction(SIGTSTP , &act, NULL) < 0) {
-		perror ("sigaction: ");
-		return 1;
-	}
-	
-	// creating 2D array of history
-	history = (char**)calloc(MAX_NUM_HISTORY,sizeof(char*));
-	currentHistoryIndex = 0;
-	
 
   char * cmd_str = (char*) malloc( MAX_COMMAND_SIZE );
 
@@ -174,7 +186,31 @@ int main() {
     // inputs something since fgets returns NULL when there
     // is no input
     while( !fgets (cmd_str, MAX_COMMAND_SIZE, stdin) );
-
+	  
+	// check if the user is trying to access a command from history
+	  if ( cmd_str && (cmd_str[0] == '!') ) {
+		  char *cmdIndexToken = strtok(cmd_str, "!");
+		  
+		  // gets number from user input and tries to access it from the history array
+		  int cmdIndex = atoi(cmdIndexToken);
+		  if (cmdIndex) {
+			  if ( (cmdIndex <= currentHistoryIndex) && (strlen(history[cmdIndex]) > 1) ) {
+				  // replaces the cmd_str with data from stored history at appropriate index
+				  strcpy(cmd_str, history[cmdIndex]);
+			  }
+			  else {
+				  // if there is no command at that index
+				  printf("Command does not exists in history\n");
+				  continue;
+			  }
+		  }
+		  else {
+			  // if atoi returns 0
+			  printf("Not a valid number\n");
+			  continue;
+		  }
+	  }
+	  
     /* Parse input */
     char *token[MAX_NUM_ARGUMENTS];
 
@@ -201,10 +237,23 @@ int main() {
       }
         token_count++;
     }
-		// checks if there is a command
+	  
+	  
+	  // handling SIGTSTP && SIGINT
+	  struct sigaction act;
+	  memset (&act, '\0', sizeof(act));
+	  act.sa_handler = &handle_signal;
+	  if (sigaction(SIGTSTP , &act, NULL) < 0 || sigaction(SIGINT , &act, NULL) < 0) {
+		  perror ("sigaction: ");
+		  return 1;
+	  }
+	  
+	  
+	// checks if there is a command
 	if (token[0]) {
 		// adds command to history and increments history index
-//		history[currentHistoryIndex] = token;
+		strcpy(history[currentHistoryIndex], cmd_str);
+		currentHistoryIndex++;
 		
 		// takes the command and the rest of argument to executeCmd function
 		int result = executeCmd(token[0], token);
